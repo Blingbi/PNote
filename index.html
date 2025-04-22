@@ -1,0 +1,241 @@
+import { useState, useEffect, useRef } from "react";
+import { initializeApp } from "firebase/app";
+import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+} from "firebase/firestore";
+import { Button } from "@/components/ui/button";
+import Quill from "quill";
+import "quill/dist/quill.snow.css";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAyIEd68K2EkWAW1ji4M0CuBd2G1Chmgzs",
+  authDomain: "pnote-1063b.firebaseapp.com",
+  projectId: "pnote-1063b",
+  storageBucket: "pnote-1063b.firebasestorage.app",
+  messagingSenderId: "158813606700",
+  appId: "1:158813606700:web:004fea0dda5595f27ad289",
+  measurementId: "G-LKDX9PPE0X"
+};
+
+const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [notes, setNotes] = useState([]);
+  const [geminiPrompt, setGeminiPrompt] = useState("");
+  const [geminiResponse, setGeminiResponse] = useState("");
+  const editorRef = useRef(null);
+  const quillRef = useRef(null);
+  const canvasRef = useRef(null);
+  const isDrawing = useRef(false);
+
+  useEffect(() => {
+    onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) fetchNotes(currentUser.uid);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (editorRef.current && !quillRef.current) {
+      quillRef.current = new Quill(editorRef.current, {
+        theme: "snow",
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+
+    const startDrawing = (e) => {
+      isDrawing.current = true;
+      ctx.beginPath();
+      ctx.moveTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
+    };
+
+    const draw = (e) => {
+      if (!isDrawing.current) return;
+      ctx.lineTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
+      ctx.stroke();
+    };
+
+    const stopDrawing = () => {
+      isDrawing.current = false;
+      ctx.closePath();
+    };
+
+    canvas.addEventListener("mousedown", startDrawing);
+    canvas.addEventListener("mousemove", draw);
+    canvas.addEventListener("mouseup", stopDrawing);
+    canvas.addEventListener("mouseleave", stopDrawing);
+
+    return () => {
+      canvas.removeEventListener("mousedown", startDrawing);
+      canvas.removeEventListener("mousemove", draw);
+      canvas.removeEventListener("mouseup", stopDrawing);
+      canvas.removeEventListener("mouseleave", stopDrawing);
+    };
+  }, []);
+
+  const register = async () => {
+    await createUserWithEmailAndPassword(auth, email, password);
+  };
+
+  const login = async () => {
+    await signInWithEmailAndPassword(auth, email, password);
+  };
+
+  const logout = async () => {
+    await signOut(auth);
+  };
+
+  const saveNote = async (text, drawing) => {
+    if (!user) return;
+    await addDoc(collection(db, "notes"), {
+      uid: user.uid,
+      text,
+      drawing,
+      createdAt: new Date(),
+    });
+    fetchNotes(user.uid);
+  };
+
+  const fetchNotes = async (uid) => {
+    const snapshot = await getDocs(collection(db, "notes"));
+    const userNotes = snapshot.docs
+      .filter((doc) => doc.data().uid === uid)
+      .map((doc) => ({ id: doc.id, ...doc.data() }));
+    setNotes(userNotes);
+  };
+
+  const handleSaveNote = async () => {
+    if (!quillRef.current || !canvasRef.current) return;
+    const content = quillRef.current.root.innerHTML;
+    const drawing = canvasRef.current.toDataURL();
+    await saveNote(content, drawing);
+  };
+
+  const askGemini = async () => {
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + GEMINI_API_KEY, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: geminiPrompt }] }],
+      }),
+    });
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response";
+    setGeminiResponse(text);
+  };
+
+  const handleSaveGeminiNote = async () => {
+    const drawing = canvasRef.current?.toDataURL();
+    await saveNote(`<p>${geminiResponse}</p>`, drawing);
+  };
+
+  const summarizeCurrentNote = async () => {
+    const text = quillRef.current?.root.innerText;
+    if (!text) return;
+    const prompt = `Summarize the following note:\n"""${text}"""`;
+    setGeminiPrompt(prompt);
+    await askGemini();
+  };
+
+  const improveCurrentNote = async () => {
+    const text = quillRef.current?.root.innerText;
+    if (!text) return;
+    const prompt = `Improve the following note with better clarity and structure:\n"""${text}"""`;
+    setGeminiPrompt(prompt);
+    await askGemini();
+  };
+
+  return (
+    <div className="p-4 max-w-xl mx-auto">
+      {!user ? (
+        <div className="space-y-2">
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full p-2 border"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full p-2 border"
+          />
+          <Button onClick={login}>Login</Button>
+          <Button onClick={register}>Register</Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h1 className="text-xl font-bold">Welcome {user.email}</h1>
+            <Button onClick={logout}>Logout</Button>
+          </div>
+          <div className="bg-white border rounded p-2" ref={editorRef}></div>
+          <canvas
+            ref={canvasRef}
+            width={400}
+            height={200}
+            className="border w-full mt-2"
+          ></canvas>
+          <Button onClick={handleSaveNote}>Save Note</Button>
+
+          <div className="mt-4 space-y-2">
+            <textarea
+              value={geminiPrompt}
+              onChange={(e) => setGeminiPrompt(e.target.value)}
+              placeholder="Ask Gemini anything..."
+              className="w-full p-2 border rounded"
+            ></textarea>
+            <div className="flex gap-2 flex-wrap">
+              <Button onClick={askGemini}>Ask Gemini</Button>
+              <Button onClick={handleSaveGeminiNote}>Save Gemini Response as Note</Button>
+              <Button onClick={summarizeCurrentNote}>Summarize Current Note</Button>
+              <Button onClick={improveCurrentNote}>Improve Current Note</Button>
+            </div>
+            {geminiResponse && (
+              <div className="mt-2 p-2 border rounded bg-gray-50">
+                <strong>Gemini:</strong> {geminiResponse}
+              </div>
+            )}
+          </div>
+
+          <ul className="list-disc pl-5">
+            {notes.map((note) => (
+              <li key={note.id} className="mb-4">
+                <div dangerouslySetInnerHTML={{ __html: note.text }}></div>
+                {note.drawing && (
+                  <img src={note.drawing} alt="drawing" className="mt-2 border" />
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
