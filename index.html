@@ -13,7 +13,6 @@ import {
   addDoc,
   getDocs,
 } from "firebase/firestore";
-import { Button } from "@/components/ui/button";
 import Quill from "quill";
 import "quill/dist/quill.snow.css";
 
@@ -21,7 +20,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyAyIEd68K2EkWAW1ji4M0CuBd2G1Chmgzs",
   authDomain: "pnote-1063b.firebaseapp.com",
   projectId: "pnote-1063b",
-  storageBucket: "pnote-1063b.firebasestorage.app",
+  storageBucket: "pnote-1063b.appspot.com",
   messagingSenderId: "158813606700",
   appId: "1:158813606700:web:004fea0dda5595f27ad289",
   measurementId: "G-LKDX9PPE0X"
@@ -186,14 +185,14 @@ export default function App() {
             onChange={(e) => setPassword(e.target.value)}
             className="w-full p-2 border"
           />
-          <Button onClick={login}>Login</Button>
-          <Button onClick={register}>Register</Button>
+          <button onClick={login} className="p-2 border rounded">Login</button>
+          <button onClick={register} className="p-2 border rounded">Register</button>
         </div>
       ) : (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h1 className="text-xl font-bold">Welcome {user.email}</h1>
-            <Button onClick={logout}>Logout</Button>
+            <button onClick={logout} className="p-2 border rounded">Logout</button>
           </div>
           <div className="bg-white border rounded p-2" ref={editorRef}></div>
           <canvas
@@ -202,7 +201,7 @@ export default function App() {
             height={200}
             className="border w-full mt-2"
           ></canvas>
-          <Button onClick={handleSaveNote}>Save Note</Button>
+          <button onClick={handleSaveNote} className="p-2 border rounded">Save Note</button>
 
           <div className="mt-4 space-y-2">
             <textarea
@@ -212,10 +211,10 @@ export default function App() {
               className="w-full p-2 border rounded"
             ></textarea>
             <div className="flex gap-2 flex-wrap">
-              <Button onClick={askGemini}>Ask Gemini</Button>
-              <Button onClick={handleSaveGeminiNote}>Save Gemini Response as Note</Button>
-              <Button onClick={summarizeCurrentNote}>Summarize Current Note</Button>
-              <Button onClick={improveCurrentNote}>Improve Current Note</Button>
+              <button onClick={askGemini} className="p-2 border rounded">Ask Gemini</button>
+              <button onClick={handleSaveGeminiNote} className="p-2 border rounded">Save Gemini Response as Note</button>
+              <button onClick={summarizeCurrentNote} className="p-2 border rounded">Summarize Current Note</button>
+              <button onClick={improveCurrentNote} className="p-2 border rounded">Improve Current Note</button>
             </div>
             {geminiResponse && (
               <div className="mt-2 p-2 border rounded bg-gray-50">
